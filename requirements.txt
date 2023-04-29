@@ -1,0 +1,12 @@
+dill==0.3.6
+multiprocess==0.70.14
+numpy==1.24.3
+pandas==2.0.1
+pathos==0.3.0
+pox==0.3.2
+ppft==1.7.6.6
+python-dateutil==2.8.2
+pytz==2023.3
+simple-slurm==0.2.6
+six==1.16.0
+tzdata==2023.3
