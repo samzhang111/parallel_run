@@ -3,7 +3,6 @@ import os
 import sys
 
 import pandas as pd
-from simple_slurm import Slurm
 
 from parallel_run_helpers import run_function
 
@@ -24,6 +23,7 @@ def parse_args():
     parser.add_argument('input', type=str, help='CSV input file')
     parser.add_argument('output', type=str, help='output file name base')
     parser.add_argument('--cores-per-job', type=int, default=1, help='Number of cores to use per job')
+    parser.add_argument('--cores-per-call', type=int, default=1, help='Number of cores used in one invocation of the function')
     parser.add_argument('--num-jobs', type=int, default=1, help='Number of jobs to run')
     parser.add_argument('--job-name', type=str, help='Name of the job')
     parser.add_argument('--python', type=str, default="python", help="Path to Python to invoke")
@@ -36,13 +36,14 @@ df_input_csv = pd.read_csv(args.input)
 N = len(df_input_csv)
 num_jobs = args.num_jobs
 cores_per_job = args.cores_per_job
+cores_per_call = args.cores_per_call
 module_fn = get_absolute_path(args.file)
 func = args.func
 input_fn = get_absolute_path(args.input)
 output_fn = get_absolute_path(args.output)
 
 job_name = args.job_name or f"{args.input}_{args.func}"
-job_args = ['python', sys.argv[0], module_fn, func, input_fn, output_fn] + ['--cores-per-job', str(cores_per_job), '--num-jobs', str(num_jobs), '--job-name', job_name]
+job_args = [args.python, sys.argv[0], module_fn, func, input_fn, output_fn] + ['--cores-per-job', str(cores_per_job), '--num-jobs', str(num_jobs), '--job-name', job_name]
 print(job_args)
 
 within_slurm = 'SLURM_JOB_ID' in os.environ
@@ -55,15 +56,17 @@ if within_slurm:
     start_ix = int((task_id - 1) * (N / task_count))
     end_ix = int(task_id * (N / task_count))
     df_subset = df_input_csv.iloc[start_ix:end_ix]
-    output_fn = f'{args.output}_{task_id}-{task_count}'
+    output_fn = f'{args.output}_{task_id}'
     print(f"WITHIN SLURM! Task {task_id}/{task_count}. Dataset of length {len(df_subset)} ({start_ix}:{end_ix})")
     run_function(get_absolute_path(args.file), args.func, args.cores_per_job, [row for index, row in df_subset.iterrows()], get_absolute_path(output_fn))
 
 else:
     ### if program is not invoked by slurm, dispatch slurm on itself
+    from simple_slurm import Slurm
+
     slurm = Slurm(
             array=range(1, num_jobs+1),
-            cpus_per_task=args.cores_per_job,
+            cpus_per_task=cores_per_job * cores_per_call,
             job_name=job_name,
         )
     slurm.sbatch(" ".join(job_args))
